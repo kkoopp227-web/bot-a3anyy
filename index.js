@@ -59,7 +59,6 @@ function persistConfig() {
     } catch (e) {
         console.error('فشل حفظ config.json:', e.message);
     }
-    uploadState(config, subBots.map((b) => ({ label: b.label, token: b.token, channelId: b.channelId, stay247: !!b.stay247 })));
 }
 
 function loadBots() {
@@ -101,11 +100,6 @@ function persistBots() {
     config.controlChannelId = controlChannelId;
     config.controlRoleId = controlRoleId;
     config.botRoleId = botRoleId;
-    uploadState(config, data)
-        .then((ok) => {
-            if (!ok) console.error('تنبيه: فشل رفع الحالة للقاعدة — التعديل محفوظ محلياً فقط وسيزول عند إعادة النشر.');
-        })
-        .catch((e) => console.error('تنبيه: فشل رفع الحالة للقاعدة:', e.message));
 }
 
 function maskToken(token) {
@@ -163,28 +157,12 @@ async function startSub(item, index) {
 }
 
 async function resolveBotsState() {
-    const local = loadBots();
-    let state = null;
-    try {
-        state = await downloadState();
-    } catch (e) {
-        console.error('خطأ في تحميل الحالة:', (e && e.message) || e);
-    }
-    const remote = (state && Array.isArray(state.bots)) ? state.bots : [];
-    if (remote.length > local.length) {
-        try { fs.writeFileSync(BOTS_FILE, JSON.stringify(remote, null, 2)); } catch (e) { /* تجاهل */ }
-        return remote;
-    }
-    if (local.length > remote.length && state) {
-        uploadState(config, local).catch(() => {});
-        console.log(`الحالة المحلية أكمل (${local.length} بوت) — أعدت رفعها لتحديث القاعدة.`);
-    }
-    return local;
+    return loadBots();
 }
 
 async function startAllFromDisk() {
     const list = await resolveBotsState();
-    console.log('تحميل ' + list.length + ' بوت من الحالة: ' + (list.map((b) => b.label).join('، ') || 'لا شيء'));
+    console.log('تحميل ' + list.length + ' بوت من الملف المحلي: ' + (list.map((b) => b.label).join('، ') || 'لا شيء'));
     let i = 1;
     for (const item of list) {
         try {
@@ -440,10 +418,7 @@ await handle.client.login(token);
                 `وضع 24/7: ${stay247 ? '✅ مفعل' : '❌ موقف'}\n` +
                 `الاختصار: اكتب \`${name}\` في الشات لجلبه لرومك.\n\n` +
                 (warn || `✅ كل شيء تمام، خل البوت يدخل الروم خلال ثواني.\n`) +
-                `📎 رابط إضافة البوت للسيرفر:\n${invite}\n\n` +
-                ((process.env.MONGODB_URI || gistEnabled())
-                    ? `✅ التخزين البعيد يعمل — البوت سيبقى بعد إعادة النشر.`
-                    : `⚠️ تنبيه: ما في تخزين بعيد (MONGODB_URI/Gist) في Render — هذا البوت سيضيع عند إعادة النشر. حطه في Render عشان يثبت.`)
+                `📎 رابط إضافة البوت للسيرفر:\n${invite}`
             );
         return interaction.editReply({ embeds: [embed] });
     } catch (e) {
@@ -641,32 +616,6 @@ process.on('SIGINT', () => {
 
 (async () => {
     const fileToken = config.token || '';
-    console.log('فحص التخزين: MONGODB_URI=' + (process.env.MONGODB_URI ? 'موجود' : 'غائب') + ' | Gist=' + (gistEnabled() ? 'مفعّل' : 'غائب'));
-    let state = null;
-    try {
-        state = await downloadState();
-    } catch (e) {
-        console.error('downloadState ألقى خطأً:', (e && e.message) || e);
-    }
-    if (state) {
-        if (state.config && typeof state.config === 'object') {
-            Object.assign(config, state.config);
-            if (fileToken) config.token = fileToken;
-        }
-        if (Array.isArray(state.bots) && state.bots.length > 0) {
-            if (!fs.existsSync(BOTS_FILE)) {
-                try { fs.writeFileSync(BOTS_FILE, JSON.stringify(state.bots, null, 2)); } catch (e) { /* تجاهل */ }
-            }
-        }
-        if ((process.env.MONGODB_URI || gistEnabled())) console.log(`تم استرجاع الحالة المحفوظة (${state.bots.length} بوت).`);
-    }
-    const storageCfgd = !!(process.env.MONGODB_URI || gistEnabled());
-    if (storageCfgd) {
-        if (state) console.log('✅ التخزين البعيد يعمل — البوتات ستبقى بعد إعادة النشر.');
-        else console.error('⚠️ التخزين البعيد معدّ لكن الاتصال فشل! السبب: ' + (lastError() || 'بدون تفاصيل (لم يُحفظ أي خطأ)'));
-    } else {
-        console.error('⚠️ لا يوجد تخزين بعيد (MONGODB_URI أو Gist) في Render! أي بوت تضيفه سيضيع عند إعادة النشر. حط MONGODB_URI (Secret File) أو GIST_TOKEN/GIST_ID الآن.');
-    }
     mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
     controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || fileOr('CONTROL_CHANNEL_ID') || fileOr('controlChannelId') || config.controlChannelId || '';
     controlRoleId = process.env.CONTROL_ROLE_ID || process.env.controlRoleId || fileOr('CONTROL_ROLE_ID') || fileOr('controlRoleId') || config.controlRoleId || '';
