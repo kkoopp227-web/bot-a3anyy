@@ -182,6 +182,7 @@ function createMusicBot(opts) {
     let forceChannelId = opts.forceChannelId || null;
     const musicEnabled = opts.musicEnabled !== false;
     const onRoomUpdate = typeof opts.onRoomUpdate === 'function' ? opts.onRoomUpdate : null;
+    const allowedGuildIds = Array.isArray(opts.allowedGuildIds) && opts.allowedGuildIds.length ? opts.allowedGuildIds : null;
 
     const client = new Client({
         intents: [
@@ -271,9 +272,23 @@ function createMusicBot(opts) {
 
     client.once(Events.ClientReady, async (c) => {
         console.log(`[${label}] البوت شغال! الاسم: ${c.user.tag}`);
+        if (allowedGuildIds) {
+            for (const guild of c.guilds.cache.values()) {
+                if (!allowedGuildIds.includes(guild.id)) {
+                    console.log(`[${label}] سيرفر غير مسموح (${guild.id}) — يخرج منه.`);
+                    guild.leave().catch(() => {});
+                }
+            }
+        }
         if (forceChannelId) {
             setTimeout(() => keepJoinedLoop(), 500);
         }
+    });
+
+    client.on(Events.GuildCreate, (guild) => {
+        if (!allowedGuildIds || allowedGuildIds.includes(guild.id)) return;
+        console.log(`[${label}] تمت دعوتي لسيرفر غير مسموح (${guild.id}) — يخرج فوراً.`);
+        guild.leave().catch(() => {});
     });
 
     function destroy() {
@@ -459,6 +474,7 @@ function createMusicBot(opts) {
     if (musicEnabled) {
         client.on(Events.MessageCreate, async (message) => {
             if (message.author.bot || !message.guild) return;
+            if (allowedGuildIds && !allowedGuildIds.includes(message.guild.id)) return;
 
             const content = message.content.trim();
             const lower = content.toLowerCase();

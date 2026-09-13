@@ -49,6 +49,11 @@ function envBotsList() {
 
 const handles = [];
 
+const allowedGuildIds = (process.env.ALLOWED_GUILD_ID || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 async function main() {
     const bots = envBotsList();
     if (bots.length === 0) {
@@ -66,6 +71,7 @@ async function main() {
                 token: item.token,
                 stay247: true,
                 forceChannelId: item.channelId,
+                allowedGuildIds,
             });
             await handle.client.login(item.token);
             handles.push(handle);
