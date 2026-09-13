@@ -46,6 +46,14 @@ async function ensureYtdlp() {
 }
 
 const YTDLP = getYtdlpPath();
+const COOKIES_FILE = process.env.COOKIES_FILE || path.join(__dirname, 'cookies.txt');
+
+function cookiesArgs() {
+    try {
+        if (fs.existsSync(COOKIES_FILE)) return ['--cookies', COOKIES_FILE];
+    } catch (e) { /* تجاهل */ }
+    return [];
+}
 
 function runYtDlp(args) {
     return spawn(YTDLP, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -59,6 +67,7 @@ function streamSong(query, startSeconds) {
         '--no-playlist',
         '--no-warnings',
         '-q',
+        ...cookiesArgs(),
         '-f',
         'ba/b',
         '-o',
