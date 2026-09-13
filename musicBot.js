@@ -51,32 +51,6 @@ function runYtDlp(args) {
     return spawn(YTDLP, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-function formatDur(secs) {
-    const s = Math.max(0, Math.floor(Number(secs) || 0));
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const ss = s % 60;
-    const pad = (n) => String(n).padStart(2, '0');
-    return (h > 0 ? h + ':' : '') + pad(m) + ':' + pad(ss);
-}
-
-async function getDuration(url) {
-    return new Promise((resolve) => {
-        try {
-            const proc = runYtDlp(['--print', 'duration', '--skip-download', '--no-warnings', url]);
-            let out = '';
-            proc.stdout.on('data', (d) => (out += d));
-            proc.on('close', () => {
-                const n = parseInt(out.trim(), 10);
-                resolve(isFinite(n) && n > 0 ? n : null);
-            });
-            proc.on('error', () => resolve(null));
-        } catch (e) {
-            resolve(null);
-        }
-    });
-}
-
 function streamSong(query, startSeconds) {
     const isLink = /^https?:\/\//i.test(query);
     const candidates = isLink
@@ -355,9 +329,6 @@ function createMusicBot(opts) {
 
         song.title = result.title || song.title || song.url;
         if (result.url) song.urlReal = result.url;
-        if (!song.duration) {
-            try { song.duration = await getDuration(song.urlReal || song.url); } catch (e) { song.duration = null; }
-        }
 
         const resource = createAudioResource(result.stream, {
             inputType: StreamType.Arbitrary,
@@ -369,8 +340,8 @@ function createMusicBot(opts) {
         q.seeking = false;
 
         q.player.play(resource);
-        const durTxt = song.duration ? ` — المدة: **${formatDur(song.duration)}**` : '';
-        q.textChannel.send(`✅ تم تشغيل: **${song.title}**${durTxt}`).catch(() => {});
+        const mention = song.requester ? `<@${song.requester}> ` : '';
+        q.textChannel.send(`${mention}✅ تم تشغيل: **${song.title}**`).catch(() => {});
     }
 
     async function handlePlay(message, query) {
@@ -388,7 +359,7 @@ function createMusicBot(opts) {
         if (q) {
             q.songs.push(song);
             if (!q.playing) playNext(message.guild.id);
-            return message.channel.send(`📃 أُضيف للقائمة: **${query}**`);
+            return message.channel.send(`${message.author} **${query}**`);
         }
 
         const ack = null;
@@ -613,13 +584,11 @@ function createMusicBot(opts) {
                 if (!q || !q.playing || !q.songs[0]) return message.channel.send('❌ ما فيه أغنية تشتغل حالياً.');
                 const secs = parseInt(seekMatch[1], 10);
                 if (!isFinite(secs) || secs < 1) return message.channel.send('❌ اكتب رقم ثواني أكبر من صفر. مثال: قدم 30');
-                const song = q.songs[0];
-                const total = song.duration ? Math.floor(song.duration) : null;
-                const target = total !== null ? Math.min(secs, total) : secs;
                 const elapsed =
                     q.player.state.status === AudioPlayerStatus.Playing
                         ? q.player.state.resource.playbackDuration / 1000
                         : 0;
+                const target = Math.floor(elapsed) + secs;
                 killProc(q.proc);
                 q.proc = null;
                 q.seeking = true;
@@ -627,14 +596,7 @@ function createMusicBot(opts) {
                 q.playId = (q.playId || 0) + 1;
                 q.playing = false;
                 playNext(message.guild.id);
-                let reply = `⏩ تم التقدم إلى **${formatDur(target)}**`;
-                if (total !== null) {
-                    reply += ` من أصل **${formatDur(total)}**`;
-                } else if (elapsed > 0) {
-                    reply += ` (من **${formatDur(elapsed)}** الحالي)`;
-                }
-                reply += ` — **${song.title || song.url}**`;
-                return message.channel.send(reply);
+                return message.channel.send(`⏩ تم التقدم **${secs} ثانية** من الأغنية.`);
             }
 
             if (lower === 'تكرار') {
