@@ -1,5 +1,6 @@
 const { createMusicBot, ensureYtdlp } = require('./musicBot');
 const http = require('http');
+const https = require('https');
 
 const httpServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -7,6 +8,15 @@ const httpServer = http.createServer((req, res) => {
 });
 const WEB_PORT = process.env.PORT || 3000;
 httpServer.listen(WEB_PORT, () => console.log(`خادم الصحة مستمع على المنفذ ${WEB_PORT}`));
+
+const SELF_URL = (process.env.SELF_URL || '').trim();
+if (SELF_URL) {
+    setInterval(() => {
+        const req = https.get(SELF_URL, (res) => { res.resume(); });
+        req.on('error', () => { /* تجاهل */ });
+    }, 5 * 60 * 1000);
+    console.log('Self-ping مفعّل كل 5 دقائق على ' + SELF_URL);
+}
 
 function buildAliases(name) {
     const stripped = String(name || '').replace(/^[#@]+/, '').toLowerCase().trim();
