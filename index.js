@@ -15,8 +15,17 @@ const {
     StringSelectMenuOptionBuilder,
 } = require('discord.js');
 const { createMusicBot, ensureYtdlp } = require('./musicBot');
+const { downloadState, uploadState, gistEnabled } = require('./persist');
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
+
+const httpServer = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('البوت شغال ✅');
+});
+const WEB_PORT = process.env.PORT || 3000;
+httpServer.listen(WEB_PORT, () => console.log(`خادم الصحة مستمع على المنفذ ${WEB_PORT}`));
 
 let config = {};
 try {
@@ -50,6 +59,7 @@ function persistConfig() {
     } catch (e) {
         console.error('فشل حفظ config.json:', e.message);
     }
+    uploadState(config, subBots.map((b) => ({ label: b.label, token: b.token, channelId: b.channelId, stay247: !!b.stay247 })));
 }
 
 function loadBots() {
@@ -76,6 +86,10 @@ function persistBots() {
     } catch (e) {
         console.error('فشل حفظ bots.json:', e.message);
     }
+    config.controlChannelId = controlChannelId;
+    config.controlRoleId = controlRoleId;
+    config.botRoleId = botRoleId;
+    uploadState(config, data);
 }
 
 function maskToken(token) {
@@ -359,7 +373,7 @@ async function handleCreateModal(interaction) {
 }
 
 const main = createMusicBot({ label: 'الرئيسي', token: process.env.MAIN_TOKEN || process.env.token || '', stay247: false, musicEnabled: false });
-const mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
+let mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
 
 main.client.once(Events.ClientReady, async (c) => {
     console.log(`البوت الرئيسي شغال: ${c.user.tag}`);
@@ -510,6 +524,23 @@ process.on('SIGINT', () => {
 });
 
 (async () => {
+    const fileToken = config.token || '';
+    const state = await downloadState();
+    if (state) {
+        if (state.config && typeof state.config === 'object') {
+            Object.assign(config, state.config);
+            if (fileToken) config.token = fileToken;
+        }
+        if (Array.isArray(state.bots) && state.bots.length > 0) {
+            try { fs.writeFileSync(BOTS_FILE, JSON.stringify(state.bots, null, 2)); } catch (e) { /* تجاهل */ }
+        }
+        if (gistEnabled()) console.log(`تم استرجاع الحالة من Gist (${state.bots.length} بوت).`);
+    }
+    mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
+    controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || fileOr('CONTROL_CHANNEL_ID') || fileOr('controlChannelId') || config.controlChannelId || '';
+    controlRoleId = process.env.CONTROL_ROLE_ID || process.env.controlRoleId || fileOr('CONTROL_ROLE_ID') || fileOr('controlRoleId') || config.controlRoleId || '';
+    botRoleId = process.env.BOT_ROLE_ID || process.env.botRoleId || fileOr('BOT_ROLE_ID') || fileOr('botRoleId') || config.botRoleId || '';
+
     if (!mainToken) {
         console.error('ما في توكن! ضبط MAIN_TOKEN (أو ملف Secret File اسمه MAIN_TOKEN، أو config.json).');
         process.exit(1);
