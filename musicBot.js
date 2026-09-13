@@ -48,6 +48,14 @@ async function ensureYtdlp() {
 const YTDLP = getYtdlpPath();
 const COOKIES_FILE = process.env.COOKIES_FILE || path.join(__dirname, 'cookies.txt');
 
+try {
+    if (fs.existsSync(COOKIES_FILE)) {
+        console.log('تم العثور على ملف الكوكيز: ' + COOKIES_FILE);
+    } else {
+        console.log('لا يوجد ملف كوكيز في: ' + COOKIES_FILE);
+    }
+} catch (e) { /* تجاهل */ }
+
 function cookiesArgs() {
     try {
         if (fs.existsSync(COOKIES_FILE)) return ['--cookies', COOKIES_FILE];
@@ -68,6 +76,8 @@ function streamSong(query, startSeconds) {
         '--no-warnings',
         '-q',
         ...cookiesArgs(),
+        '--extractor-args',
+        'youtube:player_client=tv_embedded,web_embedded',
         '-f',
         'ba/b',
         '-o',
