@@ -641,7 +641,13 @@ process.on('SIGINT', () => {
 
 (async () => {
     const fileToken = config.token || '';
-    const state = await downloadState();
+    console.log('فحص التخزين: MONGODB_URI=' + (process.env.MONGODB_URI ? 'موجود' : 'غائب') + ' | Gist=' + (gistEnabled() ? 'مفعّل' : 'غائب'));
+    let state = null;
+    try {
+        state = await downloadState();
+    } catch (e) {
+        console.error('downloadState ألقى خطأً:', (e && e.message) || e);
+    }
     if (state) {
         if (state.config && typeof state.config === 'object') {
             Object.assign(config, state.config);
