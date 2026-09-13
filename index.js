@@ -17,15 +17,21 @@ const {
 const { createMusicBot, ensureYtdlp } = require('./musicBot');
 const path = require('path');
 const fs = require('fs');
-const config = require('./config.json');
+
+let config = {};
+try {
+    config = require('./config.json');
+} catch (e) {
+    console.log('ما فيه config.json — بستخدم متغيرات البيئة.');
+}
 
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const BOTS_FILE = path.join(__dirname, 'bots.json');
 
 let subBots = [];
-let controlChannelId = config.controlChannelId || '';
-let controlRoleId = config.controlRoleId || '';
-let botRoleId = config.botRoleId || '';
+let controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || config.controlChannelId || '';
+let controlRoleId = process.env.CONTROL_ROLE_ID || process.env.controlRoleId || config.controlRoleId || '';
+let botRoleId = process.env.BOT_ROLE_ID || process.env.botRoleId || config.botRoleId || '';
 
 function persistConfig() {
     config.controlChannelId = controlChannelId;
@@ -344,8 +350,8 @@ async function handleCreateModal(interaction) {
     }
 }
 
-const main = createMusicBot({ label: 'الرئيسي', token: process.env.MAIN_TOKEN || config.token, stay247: false, musicEnabled: false });
-const mainToken = process.env.MAIN_TOKEN || config.token;
+const main = createMusicBot({ label: 'الرئيسي', token: process.env.MAIN_TOKEN || process.env.token || '', stay247: false, musicEnabled: false });
+const mainToken = process.env.MAIN_TOKEN || process.env.token || config.token || '';
 
 main.client.once(Events.ClientReady, async (c) => {
     console.log(`البوت الرئيسي شغال: ${c.user.tag}`);
@@ -496,6 +502,10 @@ process.on('SIGINT', () => {
 });
 
 (async () => {
+    if (!mainToken) {
+        console.error('ما في توكن! ضبط متغير MAIN_TOKEN (أو ضع config.json في مجلد المشروع).');
+        process.exit(1);
+    }
     const ok = await ensureYtdlp();
     if (!ok) console.error('تحذير: فشل تحضير yt-dlp — الأغاني لن تعمل على هذا الجهاز.');
     try {
