@@ -200,7 +200,9 @@ function createMusicBot(opts) {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     function hookConnection(connection, ch) {
+        connection.setMaxListeners(0);
         connection.on('stateChange', (oldS, newS) => {
+            console.log(`[${label}] حالة الصوت للروم ${ch.id}: ${oldS.status} ← ${newS.status}`);
             if (newS.status === VoiceConnectionStatus.Failed) {
                 console.error(`[${label}] فشل الالتصاق بالروم ${ch.id}: ${newS.reason || 'reason غير معروف'}`);
             }
@@ -240,6 +242,24 @@ function createMusicBot(opts) {
         setTimeout(attempt, 2000);
     }
 
+    function waitForReady(connection, timeoutMs = 10000) {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => resolve('disconnected'), timeoutMs);
+            connection.once(VoiceConnectionStatus.Ready, () => {
+                clearTimeout(timer);
+                resolve('ready');
+            });
+            connection.once(VoiceConnectionStatus.Failed, (a) => {
+                clearTimeout(timer);
+                resolve('failed:' + ((a && a.reason) || 'reason غير معروف'));
+            });
+            connection.once(VoiceConnectionStatus.Destroyed, () => {
+                clearTimeout(timer);
+                resolve('destroyed');
+            });
+        });
+    }
+
     async function keepJoinedLoop() {
         while (!shuttingDown) {
             try {
@@ -250,13 +270,20 @@ function createMusicBot(opts) {
                     console.log(`[${label}] موجود بالروم ${forceChannelId}`);
                     return;
                 }
-                hookConnection(joinVoiceChannel({
+                const connection = hookConnection(joinVoiceChannel({
                     channelId: ch.id,
                     guildId: ch.guildId,
                     adapterCreator: ch.guild.voiceAdapterCreator,
                 }), ch);
-                console.log(`[${label}] متصل بالروم ${ch.id}`);
-                return;
+                const result = await waitForReady(connection);
+                if (result === 'ready') {
+                    console.log(`[${label}] ✅ دخل فعلياً في روم ${ch.id} (Ready)`);
+                    return;
+                }
+                console.error(`[${label}] محاولة الدخول للروم ${forceChannelId} فشلت (${result}) — إعادة محاولة كل 10 ثوانٍ`);
+                try { connection.destroy(); } catch (e2) { /* تجاهل */ }
+                if (shuttingDown) return;
+                await sleep(10000);
             } catch (e) {
                 console.error(`[${label}] الدخول للروم ${forceChannelId} فشل: ${e.message} — إعادة محاولة كل 10 ثوانٍ`);
                 if (shuttingDown) return;
