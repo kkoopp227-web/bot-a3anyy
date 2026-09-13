@@ -228,6 +228,9 @@ const setRoleCmd = new SlashCommandBuilder()
 const botRoleCmd = new SlashCommandBuilder()
     .setName('رول_البوتات')
     .setDescription('إنشاء أو تحديث رول الموسيقى للبوتات (يدخل روم + يتكلم + يكتب شات)');
+const statusCmd = new SlashCommandBuilder()
+    .setName('حالة')
+    .setDescription('عرض حالة كل بوت موسيقي (متصل؟ في أي روم؟)');
 
 function isAllowed(interaction) {
     if (controlChannelId && interaction.channelId !== controlChannelId) return false;
@@ -396,7 +399,7 @@ let mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKE
 
 main.client.once(Events.ClientReady, async (c) => {
     console.log(`البوت الرئيسي شغال: ${c.user.tag}`);
-    const cmds = [menuCommand, restartCommand, setChannelCmd, setRoleCmd, botRoleCmd];
+    const cmds = [menuCommand, restartCommand, setChannelCmd, setRoleCmd, botRoleCmd, statusCmd];
     for (const guild of c.guilds.cache.values()) {
         try {
             for (const cmd of cmds) await guild.commands.create(cmd);
@@ -451,6 +454,42 @@ main.client.on(Events.InteractionCreate, async (interaction) => {
                     if (b.handle) await assignBotRole(b.handle.client.user.id);
                 }
                 return interaction.editReply(`✅ تم إنشاء/تحديث الرول <@&${role.id}> وتم تطبيقه على جميع البوتات الفرعية.`);
+            }
+            if (interaction.commandName === 'حالة') {
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+                if (subBots.length === 0) return interaction.editReply('لا يوجد بوتات فرعية.');
+                const lines = [];
+                for (const b of subBots) {
+                    const cl = b.handle?.client;
+                    let parts = [];
+                    if (!cl || !cl.user) {
+                        parts.push('❌ غير متصل');
+                    } else {
+                        parts.push(cl.user.tag);
+                        try {
+                            const ch = await cl.channels.fetch(b.channelId).catch(() => null);
+                            if (!ch) {
+                                parts.push('⚠️ الروم المحدد غير موجود (أو خارج سيرفرات هذا البوت)');
+                            } else {
+                                const g = cl.guilds.cache.get(ch.guildId);
+                                if (!g) {
+                                    parts.push('⚠️ البوت مشي في هذا السيرفر');
+                                } else {
+                                    const me = g.members.me;
+                                    const cur = me?.voice?.channelId;
+                                    if (cur === b.channelId) parts.push('✅ في رومه المحدد');
+                                    else if (cur) parts.push(`⚠️ في روم آخر (${cur})`);
+                                    else parts.push('❌ خارج أي روم صوتي');
+                                    parts.push(`سيرفر: ${g.name}`);
+                                }
+                            }
+                        } catch (e2) {
+                            parts.push('⚠️ فشل فحص الروم');
+                        }
+                    }
+                    lines.push(`**${b.label}** — ${parts.join(' | ')}`);
+                }
+                return interaction.editReply({ content: lines.join('\n') });
             }
         }
 
