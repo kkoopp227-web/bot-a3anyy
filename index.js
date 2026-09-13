@@ -28,10 +28,18 @@ try {
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const BOTS_FILE = path.join(__dirname, 'bots.json');
 
+function fileOr(name) {
+    try {
+        return fs.readFileSync(path.join(__dirname, name), 'utf8').trim() || '';
+    } catch (e) {
+        return '';
+    }
+}
+
 let subBots = [];
-let controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || config.controlChannelId || '';
-let controlRoleId = process.env.CONTROL_ROLE_ID || process.env.controlRoleId || config.controlRoleId || '';
-let botRoleId = process.env.BOT_ROLE_ID || process.env.botRoleId || config.botRoleId || '';
+let controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || fileOr('CONTROL_CHANNEL_ID') || fileOr('controlChannelId') || config.controlChannelId || '';
+let controlRoleId = process.env.CONTROL_ROLE_ID || process.env.controlRoleId || fileOr('CONTROL_ROLE_ID') || fileOr('controlRoleId') || config.controlRoleId || '';
+let botRoleId = process.env.BOT_ROLE_ID || process.env.botRoleId || fileOr('BOT_ROLE_ID') || fileOr('botRoleId') || config.botRoleId || '';
 
 function persistConfig() {
     config.controlChannelId = controlChannelId;
@@ -351,7 +359,7 @@ async function handleCreateModal(interaction) {
 }
 
 const main = createMusicBot({ label: 'الرئيسي', token: process.env.MAIN_TOKEN || process.env.token || '', stay247: false, musicEnabled: false });
-const mainToken = process.env.MAIN_TOKEN || process.env.token || config.token || '';
+const mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
 
 main.client.once(Events.ClientReady, async (c) => {
     console.log(`البوت الرئيسي شغال: ${c.user.tag}`);
@@ -503,9 +511,10 @@ process.on('SIGINT', () => {
 
 (async () => {
     if (!mainToken) {
-        console.error('ما في توكن! ضبط متغير MAIN_TOKEN (أو ضع config.json في مجلد المشروع).');
+        console.error('ما في توكن! ضبط MAIN_TOKEN (أو ملف Secret File اسمه MAIN_TOKEN، أو config.json).');
         process.exit(1);
     }
+    console.log(`استُخدم توكن يبدأ بـ: ${mainToken.slice(0, 6)}...`);
     const ok = await ensureYtdlp();
     if (!ok) console.error('تحذير: فشل تحضير yt-dlp — الأغاني لن تعمل على هذا الجهاز.');
     try {
