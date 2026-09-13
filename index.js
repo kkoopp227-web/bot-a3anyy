@@ -160,11 +160,38 @@ async function resolveBotsState() {
     return loadBots();
 }
 
+function envBotsList() {
+    const groups = {};
+    for (const key of Object.keys(process.env)) {
+        const m = /^bot_(\d+)_(token|id|room)$/i.exec(key);
+        if (!m) continue;
+        const n = parseInt(m[1], 10);
+        const kind = m[2].toLowerCase();
+        if (!groups[n]) groups[n] = {};
+        groups[n][kind] = String(process.env[key] || '').trim();
+    }
+    const out = [];
+    const nums = Object.keys(groups).sort((a, b) => Number(a) - Number(b));
+    for (const n of nums) {
+        const g = groups[n];
+        if (g.token && (g.id || g.room)) {
+            out.push({ label: '#' + n, token: g.token, channelId: g.id || g.room, stay247: true, fromEnv: true });
+        } else {
+            const missing = g.token ? `bot_${n}_id` : (g.id || g.room) ? `bot_${n}_token` : `bot_${n}_token و bot_${n}_id`;
+            console.warn(`⚠️ بوت #${n}: ناقص ${missing} من متغيرات Render — تم تجاهله.`);
+        }
+    }
+    return out;
+}
+
 async function startAllFromDisk() {
-    const list = await resolveBotsState();
-    console.log('تحميل ' + list.length + ' بوت من الملف المحلي: ' + (list.map((b) => b.label).join('، ') || 'لا شيء'));
+    const envBots = envBotsList();
+    const local = await resolveBotsState();
+    const envTokens = new Set(envBots.map((b) => b.token));
+    const merged = envBots.concat(local.filter((b) => !envTokens.has(b.token)));
+    console.log('تشغيل ' + merged.length + ' بوت: ' + (merged.map((b) => b.label).join('، ') || 'لا شيء') + (envBots.length ? ` (من متغيرات Render: ${envBots.length})` : ''));
     let i = 1;
-    for (const item of list) {
+    for (const item of merged) {
         try {
             await startSub(item, i);
             i++;
@@ -253,6 +280,16 @@ const botRoleCmd = new SlashCommandBuilder()
 const statusCmd = new SlashCommandBuilder()
     .setName('حالة')
     .setDescription('عرض حالة كل بوت موسيقي (متصل؟ في أي روم؟)');
+const idCmd = new SlashCommandBuilder()
+    .setName('ايدي')
+    .setDescription('جيب ايدي الروم الصوتي اللي انت فيه + ايدي القناة')
+    .addChannelOption((o) =>
+        o
+            .setName('الروم')
+            .setDescription('روم صوتي محدد (اختياري)')
+            .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
+            .setRequired(false)
+    );
 
 function isAllowed(interaction) {
     if (controlChannelId && interaction.channelId !== controlChannelId) return false;
@@ -272,9 +309,10 @@ function menuEmbed() {
         embed.addFields({ name: 'لا يوجد بوتات', value: 'اضغط على "➕ إضافة بوت" لإنشاء بوت جديد.' });
     } else {
         subBots.forEach((b, i) => {
+            const aliasTxt = (b.aliases && b.aliases.length ? b.aliases.join(' أو ') : '`#' + (i + 1) + '`');
             embed.addFields({
                 name: `${i + 1}. ${b.label}`,
-                value: `الاختصار: \`#${i + 1}\` (أو الاسم)\nالتوكن: \`${maskToken(b.token)}\`\nالروم: <#${b.channelId}>\n24/7: ${b.stay247 ? '✅ مفعل' : '❌ موقف'}`,
+                value: `اكتب بالشات: ${aliasTxt}\nالتوكن: \`${maskToken(b.token)}\`\nالروم: <#${b.channelId}>\n24/7: ${b.stay247 ? '✅ مفعل' : '❌ موقف'}`,
             });
         });
     }
@@ -432,7 +470,7 @@ let mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKE
 
 main.client.once(Events.ClientReady, async (c) => {
     console.log(`البوت الرئيسي شغال: ${c.user.tag}`);
-    const cmds = [menuCommand, restartCommand, setChannelCmd, setRoleCmd, botRoleCmd, statusCmd];
+    const cmds = [menuCommand, restartCommand, setChannelCmd, setRoleCmd, botRoleCmd, statusCmd, idCmd];
     for (const guild of c.guilds.cache.values()) {
         try {
             for (const cmd of cmds) await guild.commands.create(cmd);
@@ -523,6 +561,18 @@ main.client.on(Events.InteractionCreate, async (interaction) => {
                     lines.push(`**${b.label}** — ${parts.join(' | ')}`);
                 }
                 return interaction.editReply({ content: lines.join('\n') });
+            }
+            if (interaction.commandName === 'ايدي') {
+                await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+                const mem = interaction.member;
+                const vc = mem?.voice?.channel;
+                const optCh = interaction.options.getChannel('الروم');
+                const out = ['**معرفات جاهزة للنسخ:**'];
+                if (vc) out.push(`🎙️ انت في روم: \`${vc.id}\``);
+                if (optCh) out.push(`🎙️ الروم المحدد: \`${optCh.id}\``);
+                if (!vc && !optCh) out.push('❌ ما انت داخل أي روم صوتي، ويمكنك اختيار روم من خيار "الروم".');
+                out.push(`💬 هذي القناة: \`${interaction.channelId}\``);
+                return interaction.editReply(out.join('\n'));
             }
         }
 
