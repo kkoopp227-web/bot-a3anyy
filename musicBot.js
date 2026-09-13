@@ -46,40 +46,6 @@ async function ensureYtdlp() {
 }
 
 const YTDLP = getYtdlpPath();
-const COOKIES_B64 = process.env.COOKIES_FILE_B64;
-const COOKIES_FILE = process.env.COOKIES_FILE || path.join(__dirname, 'cookies.txt');
-
-try {
-    if (COOKIES_B64) {
-        const decoded = Buffer.from(COOKIES_B64, 'base64').toString('utf8');
-        fs.writeFileSync(COOKIES_FILE, decoded);
-        const lines = decoded.split('\n').filter(l => l && !l.trim().startsWith('#'));
-        const hasSID = /^(\.youtube\.com\s+TRUE\s+\/\s+(TRUE|FALSE)\s+[0-9]+\s+SID\s)/m.test(decoded);
-        const first = lines.length ? lines[0].split('\t').slice(0, 4).join(' | ') : '---';
-        const last = lines.length ? lines[lines.length - 1].split('\t').slice(0, 4).join(' | ') : '---';
-        console.log('الكوكيز: ' + lines.length + ' سطر مفعّلة، فيه SID؟ ' + (hasSID ? 'نعم' : 'لا'));
-        console.log('أول كوكي: ' + first);
-        console.log('آخر كوكي: ' + last);
-        console.log('تم إنشاء ملف الكوكيز من المتغير COOKIES_FILE_B64.');
-    }
-} catch (e) {
-    console.log('فشل إنشاء الكوكيز من المتغير: ' + (e && e.message));
-}
-
-try {
-    if (fs.existsSync(COOKIES_FILE)) {
-        console.log('تم العثور على ملف الكوكيز: ' + COOKIES_FILE);
-    } else {
-        console.log('لا يوجد ملف كوكيز في: ' + COOKIES_FILE);
-    }
-} catch (e) { /* تجاهل */ }
-
-function cookiesArgs() {
-    try {
-        if (fs.existsSync(COOKIES_FILE)) return ['--cookies', COOKIES_FILE];
-    } catch (e) { /* تجاهل */ }
-    return [];
-}
 
 function runYtDlp(args) {
     return spawn(YTDLP, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -89,15 +55,12 @@ function streamSong(query, startSeconds) {
     const isLink = /^https?:\/\//i.test(query);
     const candidates = isLink
         ? [query]
-        : [`ytsearch1:${query}`, `scsearch1:${query}`];
+        : [`scsearch1:${query}`];
     const titleFileBase = path.join(os.tmpdir(), `ytdlp_title_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2)}`);
     const baseArgs = [
         '--no-playlist',
         '--no-warnings',
         '-q',
-        ...cookiesArgs(),
-        '--extractor-args',
-        'youtube:player_client=tv_embedded,android_vr,web_embedded;skip=web',
         '-f',
         'ba/b',
         '-o',
@@ -394,7 +357,7 @@ function createMusicBot(opts) {
         if (q) {
             q.songs.push(song);
             if (!q.playing) playNext(message.guild.id);
-            return message.channel.send(`📋 تمت الإضافة للطابور: **${query}**`);
+            return;
         }
 
         const ack = await message.channel.send(`⏳ جاري التجهيز: **${query}**`);
@@ -537,41 +500,6 @@ function createMusicBot(opts) {
                 } catch (e) {
                     console.error(`[${label}] فشل الدخول بالاختصار: ${e.message}`);
                 }
-                return;
-            }
-
-            if (/^(فحص|cookies|cok|تشخيص|diagnostic)$/i.test(lower)) {
-                const P = COOKIES_FILE;
-                let exists = false, size = 0, lines = 0, hasSID = false, first = '---', last = '---';
-                try {
-                    if (fs.existsSync(P)) {
-                        exists = true;
-                        const txt = fs.readFileSync(P, 'utf8');
-                        size = txt.length;
-                        const arr = txt.split('\n').filter(l => l && !l.trim().startsWith('#'));
-                        lines = arr.length;
-                        hasSID = /^(\.youtube\.com\s+TRUE\s+\/\s+(TRUE|FALSE)\s+[0-9]+\s+SID\s)/m.test(txt);
-                        if (arr.length) {
-                            const a = arr[0].split('\t'); first = a.slice(0, 5).join(' | ');
-                            const b = arr[arr.length - 1].split('\t'); last = b.slice(0, 5).join(' | ');
-                        }
-                    }
-                } catch (e) { /* تجاهل */ }
-                message.channel.send(
-                    `🧪 **فحص الكوكيز**\n` +
-                    `الملف: ${exists ? 'موجود' : 'مفقود'} (حجم ${size} بايت)\n` +
-                    `سطور مفعّلة: ${lines}\n` +
-                    `فيه SID؟ ${hasSID ? 'نعم' : 'لا'}\n` +
-                    `أول كوكي: ${first}\n` +
-                    `آخر كوكي: ${last}`
-                ).catch((e) => console.error(`[${label}] فشل رد الفحص: ${e.message}`));
-                try {
-                    const vp = spawn(YTDLP, ['--version'], { windowsHide: true });
-                    vp.stdout.on('data', (d) => {
-                        message.channel.send(`🛠 إصدار yt-dlp: **${d.toString().trim()}**`).catch(() => {});
-                    });
-                    vp.once('error', () => {});
-                } catch (e) { /* تجاهل */ }
                 return;
             }
 
