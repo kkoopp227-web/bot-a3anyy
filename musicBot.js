@@ -53,6 +53,13 @@ try {
     if (COOKIES_B64) {
         const decoded = Buffer.from(COOKIES_B64, 'base64').toString('utf8');
         fs.writeFileSync(COOKIES_FILE, decoded);
+        const lines = decoded.split('\n').filter(l => l && !l.trim().startsWith('#'));
+        const hasSID = /^(\.youtube\.com\s+TRUE\s+\/\s+(TRUE|FALSE)\s+[0-9]+\s+SID\s)/m.test(decoded);
+        const first = lines.length ? lines[0].split('\t').slice(0, 4).join(' | ') : '---';
+        const last = lines.length ? lines[lines.length - 1].split('\t').slice(0, 4).join(' | ') : '---';
+        console.log('الكوكيز: ' + lines.length + ' سطر مفعّلة، فيه SID؟ ' + (hasSID ? 'نعم' : 'لا'));
+        console.log('أول كوكي: ' + first);
+        console.log('آخر كوكي: ' + last);
         console.log('تم إنشاء ملف الكوكيز من المتغير COOKIES_FILE_B64.');
     }
 } catch (e) {
@@ -88,7 +95,7 @@ function streamSong(query, startSeconds) {
         '-q',
         ...cookiesArgs(),
         '--extractor-args',
-        'youtube:player_client=tv_embedded,web_embedded',
+        'youtube:player_client=tv_embedded,android_vr,web_embedded;skip=web',
         '-f',
         'ba/b',
         '-o',
