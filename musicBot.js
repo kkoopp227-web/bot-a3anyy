@@ -220,35 +220,6 @@ function createMusicBot(opts) {
         return connection;
     }
 
-    function scheduleRejoin(channelId, guildId, adapterCreator) {
-        if (rejoinTimers.has(guildId)) return;
-        rejoinTimers.set(guildId, true);
-        console.log(`[${label}] بهربط الروم ${channelId} مرة ثانية`);
-        const attempt = async () => {
-            if (shuttingDown) { rejoinTimers.delete(guildId); return; }
-            try {
-                const ch = await client.channels.fetch(channelId);
-                const me = client.guilds.cache.get(guildId)?.members?.me;
-                if (me && me.voice.channelId === channelId) {
-                    console.log(`[${label}] موجود بالروم ${channelId}`);
-                    rejoinTimers.delete(guildId);
-                    return;
-                }
-                hookConnection(joinVoiceChannel({
-                    channelId,
-                    guildId,
-                    adapterCreator,
-                }), ch);
-                console.log(`[${label}] رجعت للروم ${channelId}`);
-                rejoinTimers.delete(guildId);
-            } catch (e) {
-                console.error(`[${label}] إعادة الدخول للروم ${channelId} فشلت: ${e.message} — محاولة أخرى بعد 10 ثوانٍ`);
-                setTimeout(attempt, 10000);
-            }
-        };
-        setTimeout(attempt, 2000);
-    }
-
     function waitForReady(connection, timeoutMs = 10000) {
         return new Promise((resolve) => {
             const timer = setTimeout(() => resolve('disconnected'), timeoutMs);
@@ -297,15 +268,6 @@ function createMusicBot(opts) {
             }
         }
     }
-
-    client.on(Events.VoiceStateUpdate, (oldS, newS) => {
-        if (!stay247 || !forceChannelId) return;
-        if (newS.id !== client.user.id) return;
-        if (newS.channelId && newS.channelId !== forceChannelId) {
-            console.log(`[${label}] تم تحريكي لروم آخر (${newS.channelId})، برجع للروم المحدد ${forceChannelId}`);
-            scheduleRejoin(forceChannelId, newS.guild.id, newS.guild.voiceAdapterCreator);
-        }
-    });
 
     client.once(Events.ClientReady, async (c) => {
         console.log(`[${label}] البوت شغال! الاسم: ${c.user.tag}`);
