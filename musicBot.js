@@ -87,9 +87,11 @@ function runYtDlp(args) {
 
 function streamSong(query, startSeconds) {
     const isLink = /^https?:\/\//i.test(query);
-    const target = isLink ? query : `ytsearch1:${query}`;
-    const titleFile = path.join(os.tmpdir(), `ytdlp_title_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2)}.txt`);
-    const args = [
+    const candidates = isLink
+        ? [query]
+        : [`ytsearch1:${query}`, `scsearch1:${query}`];
+    const titleFileBase = path.join(os.tmpdir(), `ytdlp_title_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    const baseArgs = [
         '--no-playlist',
         '--no-warnings',
         '-q',
@@ -100,30 +102,33 @@ function streamSong(query, startSeconds) {
         'ba/b',
         '-o',
         '-',
-        '--print-to-file',
-        '%(title)s\n%(webpage_url)s',
-        titleFile,
     ];
     if (startSeconds && startSeconds > 0) {
-        args.push('--downloader', 'ffmpeg', '--downloader-args', `ffmpeg:-ss ${startSeconds}`);
+        baseArgs.push('--downloader', 'ffmpeg', '--downloader-args', `ffmpeg:-ss ${startSeconds}`);
     }
-    args.push(target);
-    const proc = runYtDlp(args);
 
-    let done = false;
-    const cleanup = () => {
-        try { fs.unlinkSync(titleFile); } catch (e) { /* تجاهل */ }
-    };
+    let activeProc = null;
+    let idx = 0;
+    let lastErr = null;
 
-    const readTitle = () => {
-        try {
-            if (!fs.existsSync(titleFile)) return null;
-            const lines = fs.readFileSync(titleFile, 'utf8').split('\n');
-            return { title: (lines[0] || '').trim(), url: (lines[1] || '').trim() };
-        } catch (e) { return null; }
-    };
+    const attempt = (target) => new Promise((resolve, reject) => {
+        const titleFile = `${titleFileBase}_${idx++}.txt`;
+        const args = baseArgs.concat('--print-to-file', '%(title)s\n%(webpage_url)s', titleFile, target);
+        const proc = runYtDlp(args);
+        activeProc = proc;
 
-    const promise = new Promise((resolve, reject) => {
+        let done = false;
+        const cleanup = () => {
+            try { fs.unlinkSync(titleFile); } catch (e) { /* تجاهل */ }
+        };
+        const readTitle = () => {
+            try {
+                if (!fs.existsSync(titleFile)) return null;
+                const lines = fs.readFileSync(titleFile, 'utf8').split('\n');
+                return { title: (lines[0] || '').trim(), url: (lines[1] || '').trim() };
+            } catch (e) { return null; }
+        };
+
         const poll = setInterval(() => {
             const info = readTitle();
             if (info && info.title) {
@@ -142,9 +147,11 @@ function streamSong(query, startSeconds) {
 
         proc.on('error', (e) => {
             clearInterval(poll);
-            done = true;
-            cleanup();
-            reject(e);
+            if (!done) {
+                done = true;
+                cleanup();
+                reject(e);
+            }
         });
 
         proc.on('close', (code) => {
@@ -153,8 +160,8 @@ function streamSong(query, startSeconds) {
                 done = true;
                 const info = readTitle();
                 cleanup();
-                if (code === 0) {
-                    resolve({ title: info?.title || null, url: info?.url || null, stream: proc.stdout });
+                if (code === 0 && info && info.title) {
+                    resolve({ title: info.title, url: info.url || null, stream: proc.stdout });
                 } else {
                     reject(new Error(errTail || `رمز الخطأ ${code}`));
                 }
@@ -162,7 +169,27 @@ function streamSong(query, startSeconds) {
         });
     });
 
-    return { proc, promise };
+    const promise = (async () => {
+        for (const target of candidates) {
+            try {
+                return await attempt(target);
+            } catch (e) {
+                lastErr = e;
+            }
+        }
+        throw lastErr || new Error('لا يوجد مصدر متاح');
+    })();
+
+    return {
+        proc: {
+            kill() {
+                if (activeProc) {
+                    try { activeProc.kill(); } catch (e) { /* تجاهل */ }
+                }
+            },
+        },
+        promise,
+    };
 }
 
 function killProc(proc) {
@@ -389,9 +416,6 @@ function createMusicBot(opts) {
         };
         queues.set(message.guild.id, q);
 
-        const sp = streamSong(query);
-        q.proc = sp.proc;
-
         let connection;
         try {
             connection = joinVoiceChannel({
@@ -416,7 +440,8 @@ function createMusicBot(opts) {
             await entersState(connection, VoiceConnectionStatus.Ready, 20000);
         } catch (e) {
             queues.delete(message.guild.id);
-            killProc(sp.proc);
+            killProc(q.proc);
+            q.proc = null;
             if (connection) {
                 try { connection.destroy(); } catch (e2) { /* تجاهل */ }
             }
