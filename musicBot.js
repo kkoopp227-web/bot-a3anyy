@@ -339,7 +339,13 @@ function createMusicBot(opts) {
         q.seeking = false;
 
         q.player.play(resource);
-        editAck(q, `🎵 جاري تشغيل: **${song.title}**`);
+        const mention = song.requester ? `<@${song.requester}> ` : '';
+        const trackMsg = `${mention}✅ تم تشغيل: **${song.title}**`;
+        if (song.isFirst) {
+            editAck(q, trackMsg);
+        } else {
+            q.textChannel.send(trackMsg).catch(() => {});
+        }
     }
 
     async function handlePlay(message, query) {
@@ -351,16 +357,17 @@ function createMusicBot(opts) {
             return message.channel.send('❌ انا في روم ثاني.');
         }
 
-        const song = { title: null, url: query };
+        const song = { title: null, url: query, requester: message.author.id };
 
         let q = queues.get(message.guild.id);
         if (q) {
             q.songs.push(song);
             if (!q.playing) playNext(message.guild.id);
-            return;
+            return message.channel.send(`${message.author} **${query}**`);
         }
 
         const ack = await message.channel.send(`⏳ جاري التجهيز: **${query}**`);
+        song.isFirst = true;
 
         q = {
             textChannel: message.channel,
@@ -537,10 +544,11 @@ function createMusicBot(opts) {
             if (/^(س|سكب|s|skip)$/i.test(lower)) {
                 const q = queues.get(message.guild.id);
                 if (!q || !q.playing) return message.channel.send('❌ ما فيه أغنية تشتغل حالياً.');
+                const skippedTitle = (q.songs[0] && (q.songs[0].title || q.songs[0].url)) || 'الأغنية';
                 killProc(q.proc);
                 q.proc = null;
                 q.player.stop(true);
-                return message.channel.send('⏭️ تم تخطي الأغنية.');
+                return message.channel.send(`⏭️ تم تخطي الأغنية: **${skippedTitle}**`);
             }
 
             const volumeMatch = content.match(/^(?:صوت|ص|v)\s*(\d+)$/i);
