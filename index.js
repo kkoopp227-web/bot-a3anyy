@@ -89,7 +89,11 @@ function persistBots() {
     config.controlChannelId = controlChannelId;
     config.controlRoleId = controlRoleId;
     config.botRoleId = botRoleId;
-    uploadState(config, data);
+    uploadState(config, data)
+        .then((ok) => {
+            if (!ok) console.error('تنبيه: فشل رفع الحالة للقاعدة — التعديل محفوظ محلياً فقط وسيزول عند إعادة النشر.');
+        })
+        .catch((e) => console.error('تنبيه: فشل رفع الحالة للقاعدة:', e.message));
 }
 
 function maskToken(token) {
@@ -145,9 +149,31 @@ async function startSub(item, index) {
     }
 }
 
+async function resolveBotsState() {
+    const local = loadBots();
+    let state = null;
+    try {
+        state = await downloadState();
+    } catch (e) {
+        console.error('خطأ في تحميل الحالة:', (e && e.message) || e);
+    }
+    const remote = (state && Array.isArray(state.bots)) ? state.bots : [];
+    if (remote.length > local.length) {
+        try { fs.writeFileSync(BOTS_FILE, JSON.stringify(remote, null, 2)); } catch (e) { /* تجاهل */ }
+        return remote;
+    }
+    if (local.length > remote.length && state) {
+        uploadState(config, local).catch(() => {});
+        console.log(`الحالة المحلية أكمل (${local.length} بوت) — أعدت رفعها لتحديث القاعدة.`);
+    }
+    return local;
+}
+
 async function startAllFromDisk() {
+    const list = await resolveBotsState();
+    console.log('تحميل ' + list.length + ' بوت من الحالة: ' + (list.map((b) => b.label).join('، ') || 'لا شيء'));
     let i = 1;
-    for (const item of loadBots()) {
+    for (const item of list) {
         try {
             await startSub(item, i);
             i++;
@@ -469,7 +495,7 @@ main.client.on(Events.InteractionCreate, async (interaction) => {
             if (interaction.commandName === 'حالة') {
                 await interaction.deferReply({ flags: MessageFlags.Ephemeral });
                 if (subBots.length === 0) return interaction.editReply('لا يوجد بوتات فرعية.');
-                const lines = [];
+                const lines = ['**عدد البوتات:** ' + subBots.length];
                 for (const b of subBots) {
                     const cl = b.handle?.client;
                     let parts = [];
@@ -601,7 +627,9 @@ process.on('SIGINT', () => {
             if (fileToken) config.token = fileToken;
         }
         if (Array.isArray(state.bots) && state.bots.length > 0) {
-            try { fs.writeFileSync(BOTS_FILE, JSON.stringify(state.bots, null, 2)); } catch (e) { /* تجاهل */ }
+            if (!fs.existsSync(BOTS_FILE)) {
+                try { fs.writeFileSync(BOTS_FILE, JSON.stringify(state.bots, null, 2)); } catch (e) { /* تجاهل */ }
+            }
         }
         if ((process.env.MONGODB_URI || gistEnabled())) console.log(`تم استرجاع الحالة المحفوظة (${state.bots.length} بوت).`);
     }
