@@ -195,19 +195,26 @@ function createMusicBot(opts) {
     const queues = new Map();
     const boundChannels = new Map();
     const rejoinTimers = new Map();
+    const activeVoiceConns = new Map();
     let shuttingDown = false;
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
     function hookConnection(connection, ch) {
         connection.setMaxListeners(0);
+        const mapKey = ch.guildId;
+        const old = activeVoiceConns.get(mapKey);
+        if (old) {
+            try { old.destroy(); } catch (e3) { /* تجاهل */ }
+            activeVoiceConns.delete(mapKey);
+        }
+        activeVoiceConns.set(mapKey, connection);
         connection.on('stateChange', (oldS, newS) => {
-            console.log(`[${label}] حالة الصوت للروم ${ch.id}: ${oldS.status} ← ${newS.status}`);
             if (newS.status === VoiceConnectionStatus.Failed) {
                 console.error(`[${label}] فشل الالتصاق بالروم ${ch.id}: ${newS.reason || 'reason غير معروف'}`);
             }
-            if (newS.status === VoiceConnectionStatus.Disconnected && stay247) {
-                scheduleRejoin(ch.id, ch.guildId, ch.guild.voiceAdapterCreator);
+            if (newS.status === VoiceConnectionStatus.Destroyed) {
+                if (activeVoiceConns.get(mapKey) === connection) activeVoiceConns.delete(mapKey);
             }
         });
         return connection;
@@ -280,10 +287,9 @@ function createMusicBot(opts) {
                     console.log(`[${label}] ✅ دخل فعلياً في روم ${ch.id} (Ready)`);
                     return;
                 }
-                console.error(`[${label}] محاولة الدخول للروم ${forceChannelId} فشلت (${result}) — إعادة محاولة كل 10 ثوانٍ`);
-                try { connection.destroy(); } catch (e2) { /* تجاهل */ }
+                console.error(`[${label}] محاولة الدخول للروم ${forceChannelId} لم تصل لـ Ready (${result}) — سأجرب مجدداً خلال 8 ثوانٍ`);
                 if (shuttingDown) return;
-                await sleep(10000);
+                await sleep(8000);
             } catch (e) {
                 console.error(`[${label}] الدخول للروم ${forceChannelId} فشل: ${e.message} — إعادة محاولة كل 10 ثوانٍ`);
                 if (shuttingDown) return;
