@@ -515,6 +515,41 @@ function createMusicBot(opts) {
                 return;
             }
 
+            if (/^(فحص|cookies|cok|تشخيص|diagnostic)$/i.test(lower)) {
+                const P = COOKIES_FILE;
+                let exists = false, size = 0, lines = 0, hasSID = false, first = '---', last = '---';
+                try {
+                    if (fs.existsSync(P)) {
+                        exists = true;
+                        const txt = fs.readFileSync(P, 'utf8');
+                        size = txt.length;
+                        const arr = txt.split('\n').filter(l => l && !l.trim().startsWith('#'));
+                        lines = arr.length;
+                        hasSID = /^(\.youtube\.com\s+TRUE\s+\/\s+(TRUE|FALSE)\s+[0-9]+\s+SID\s)/m.test(txt);
+                        if (arr.length) {
+                            const a = arr[0].split('\t'); first = a.slice(0, 5).join(' | ');
+                            const b = arr[arr.length - 1].split('\t'); last = b.slice(0, 5).join(' | ');
+                        }
+                    }
+                } catch (e) { /* تجاهل */ }
+                message.channel.send(
+                    `🧪 **فحص الكوكيز**\n` +
+                    `الملف: ${exists ? 'موجود' : 'مفقود'} (حجم ${size} بايت)\n` +
+                    `سطور مفعّلة: ${lines}\n` +
+                    `فيه SID؟ ${hasSID ? 'نعم' : 'لا'}\n` +
+                    `أول كوكي: ${first}\n` +
+                    `آخر كوكي: ${last}`
+                ).catch((e) => console.error(`[${label}] فشل رد الفحص: ${e.message}`));
+                try {
+                    const vp = spawn(YTDLP, ['--version'], { windowsHide: true });
+                    vp.stdout.on('data', (d) => {
+                        message.channel.send(`🛠 إصدار yt-dlp: **${d.toString().trim()}**`).catch(() => {});
+                    });
+                    vp.once('error', () => {});
+                } catch (e) { /* تجاهل */ }
+                return;
+            }
+
             const isCommand =
                 /^(ش|شغل|p)\s+/i.test(lower) ||
                 /^(واقف|stop|ايقاف|س|سكب|s|skip)$/i.test(lower) ||
