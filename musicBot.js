@@ -46,7 +46,18 @@ async function ensureYtdlp() {
 }
 
 const YTDLP = getYtdlpPath();
+const COOKIES_B64 = process.env.COOKIES_FILE_B64;
 const COOKIES_FILE = process.env.COOKIES_FILE || path.join(__dirname, 'cookies.txt');
+
+try {
+    if (COOKIES_B64) {
+        const decoded = Buffer.from(COOKIES_B64, 'base64').toString('utf8');
+        fs.writeFileSync(COOKIES_FILE, decoded);
+        console.log('تم إنشاء ملف الكوكيز من المتغير COOKIES_FILE_B64.');
+    }
+} catch (e) {
+    console.log('فشل إنشاء الكوكيز من المتغير: ' + (e && e.message));
+}
 
 try {
     if (fs.existsSync(COOKIES_FILE)) {
