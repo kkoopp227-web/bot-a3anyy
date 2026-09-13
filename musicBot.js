@@ -340,12 +340,7 @@ function createMusicBot(opts) {
 
         q.player.play(resource);
         const mention = song.requester ? `<@${song.requester}> ` : '';
-        const trackMsg = `${mention}✅ تم تشغيل: **${song.title}**`;
-        if (song.isFirst) {
-            editAck(q, trackMsg);
-        } else {
-            q.textChannel.send(trackMsg).catch(() => {});
-        }
+        q.textChannel.send(`${mention}✅ تم تشغيل: **${song.title}**`).catch(() => {});
     }
 
     async function handlePlay(message, query) {
@@ -366,8 +361,8 @@ function createMusicBot(opts) {
             return message.channel.send(`${message.author} **${query}**`);
         }
 
-        const ack = await message.channel.send(`⏳ جاري التجهيز: **${query}**`);
-        song.isFirst = true;
+        const ack = null;
+        song.isFirst = false;
 
         q = {
             textChannel: message.channel,
