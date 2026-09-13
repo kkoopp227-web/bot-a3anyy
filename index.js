@@ -74,6 +74,18 @@ function loadBots() {
     }
 }
 
+function buildAliases(name) {
+    const stripped = String(name || '').replace(/^[#@]+/, '').toLowerCase().trim();
+    const set = new Set();
+    if (name) set.add(String(name).toLowerCase());
+    if (stripped) {
+        set.add(stripped);
+        set.add('#' + stripped);
+        set.add('@' + stripped);
+    }
+    return [...set];
+}
+
 function persistBots() {
     const data = subBots.map((b) => ({
         label: b.label,
@@ -122,7 +134,7 @@ async function startSub(item, index) {
     try {
         handle = createMusicBot({
             label: item.label,
-            aliases: [item.label, `#${index}`, `${index}`, `@${index}`],
+            aliases: buildAliases(item.label),
             token: item.token,
             stay247: !!item.stay247,
             forceChannelId: item.channelId || null,
@@ -137,6 +149,7 @@ async function startSub(item, index) {
             token: item.token,
             channelId: item.channelId,
             stay247: !!item.stay247,
+            aliases: buildAliases(item.label),
             handle,
         });
         await assignBotRole(handle.client.user.id);
@@ -331,7 +344,7 @@ async function openAddModal(interaction) {
         .setTitle('➕ إضافة بوت موسيقي جديد')
         .addComponents(
             new ActionRowBuilder().addComponents(
-                new TextInputBuilder().setCustomId('name').setLabel('الاسم / الاختصار').setStyle(TextInputStyle.Short).setMaxLength(32).setPlaceholder('مثال: بوت ٢'),
+                new TextInputBuilder().setCustomId('name').setLabel('الاختصار (اكتبه هكذا في الشات)').setStyle(TextInputStyle.Short).setMaxLength(32).setPlaceholder('مثال: #4'),
             ),
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder().setCustomId('token').setLabel('رمز التوكن (Bot Token)').setStyle(TextInputStyle.Short).setPlaceholder('MTAxxxxxxxx...'),
@@ -355,10 +368,16 @@ async function handleCreateModal(interaction) {
     const stayRaw = interaction.fields.getTextInputValue('stay').trim().toLowerCase();
     const stay247 = stayRaw === 'نعم' || stayRaw === 'yes' || stayRaw === 'y';
 
-    if (!name) return interaction.editReply('❌ اكتب اسم للبوت.');
-    const normName = name.replace(/^[#@]/, '').toLowerCase().trim();
-    if (subBots.some((b) => b.label.replace(/^[#@]/, '').toLowerCase().trim() === normName)) {
-        return interaction.editReply('❌ في بوت بهذا الاسم من قبل.');
+    if (!name) return interaction.editReply('❌ اكتب اختصار في أول خانة (مثل: #4).');
+    const normName = name.replace(/^[#@]+/, '').toLowerCase().trim();
+    if (!normName) return interaction.editReply('❌ الاختصار لازم يكون رقم أو حروف بعد # مثل: #4.');
+    const variants = new Set();
+    if (name) variants.add(name.toLowerCase());
+    if (normName) { variants.add(normName); variants.add('#' + normName); variants.add('@' + normName); }
+    const aliases = [...variants];
+    const clash = subBots.some((b) => aliases.some((a) => (b.aliases || []).includes(a)));
+    if (clash) {
+        return interaction.editReply(`❌ الاختصار \`${name}\` مستخدم من بوت آخر. اختر رقماً مختلفاً (مثل: #${subBots.length + 2}) — كل بوت لازم اختصار مختلف.`);
     }
     if (!token || token.length < 30 || !token.includes('.')) {
         return interaction.editReply('❌ التوكن غير صحيح.');
@@ -372,11 +391,10 @@ async function handleCreateModal(interaction) {
 
     let handle = null;
     try {
-        const index = subBots.length + 1;
-        const entry = { label: name, token, channelId, stay247, handle: null };
+        const entry = { label: name, token, channelId, stay247, aliases, handle: null };
         handle = createMusicBot({
             label: name,
-            aliases: [name, `#${index}`, `${index}`, `@${index}`],
+            aliases,
             token,
             stay247,
             forceChannelId: channelId,
@@ -420,9 +438,12 @@ await handle.client.login(token);
                 `**${name}** شغال الآن.\n` +
                 `الروم: <#${channelId}>\n` +
                 `وضع 24/7: ${stay247 ? '✅ مفعل' : '❌ موقف'}\n` +
-                `الاختصار: اكتب \`#${index}\` (أو \`${name}\`) في الشات لجلبه لرومك.\n\n` +
+                `الاختصار: اكتب \`${name}\` في الشات لجلبه لرومك.\n\n` +
                 (warn || `✅ كل شيء تمام، خل البوت يدخل الروم خلال ثواني.\n`) +
-                `📎 رابط إضافة البوت للسيرفر:\n${invite}`
+                `📎 رابط إضافة البوت للسيرفر:\n${invite}\n\n` +
+                ((process.env.MONGODB_URI || gistEnabled())
+                    ? `✅ التخزين البعيد يعمل — البوت سيبقى بعد إعادة النشر.`
+                    : `⚠️ تنبيه: ما في تخزين بعيد (MONGODB_URI/Gist) في Render — هذا البوت سيضيع عند إعادة النشر. حطه في Render عشان يثبت.`)
             );
         return interaction.editReply({ embeds: [embed] });
     } catch (e) {
@@ -632,6 +653,13 @@ process.on('SIGINT', () => {
             }
         }
         if ((process.env.MONGODB_URI || gistEnabled())) console.log(`تم استرجاع الحالة المحفوظة (${state.bots.length} بوت).`);
+    }
+    const storageCfgd = !!(process.env.MONGODB_URI || gistEnabled());
+    if (storageCfgd) {
+        if (state) console.log('✅ التخزين البعيد يعمل — البوتات ستبقى بعد إعادة النشر.');
+        else console.error('⚠️ التخزين البعيد معدّ لكن الاتصال فشل! البوتات لن تُستعاد عند إعادة النشر. افحص MONGODB_URI/Gist في Render.');
+    } else {
+        console.error('⚠️ لا يوجد تخزين بعيد (MONGODB_URI أو Gist) في Render! أي بوت تضيفه سيضيع عند إعادة النشر. حط MONGODB_URI (Secret File) أو GIST_TOKEN/GIST_ID الآن.');
     }
     mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
     controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || fileOr('CONTROL_CHANNEL_ID') || fileOr('controlChannelId') || config.controlChannelId || '';

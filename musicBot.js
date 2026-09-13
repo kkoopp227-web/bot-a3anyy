@@ -468,9 +468,9 @@ function createMusicBot(opts) {
             const content = message.content.trim();
             const lower = content.toLowerCase();
 
-            const strippedLower = lower.replace(/^[#@]/, '').trim();
+            const strippedLower = lower.replace(/^[#@]+/, '').trim();
             if (content.length <= 40 && !/^(ش|شغل|p)\s/i.test(lower)) {
-                console.log(`[${label}] (${client.user.tag}) استقبل رسالة: "${content}"`);
+                console.log(`[${label}] (${client.user.tag}) استقبل رسالة: "${content}" → مجردة: "${strippedLower}"`);
             }
             if (aliases.length && aliases.includes(strippedLower)) {
                 console.log(`[${label}] (${client.user.tag}) طابق الاختصار: "${content}"`);
