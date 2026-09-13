@@ -350,12 +350,30 @@ async function handleCreateModal(interaction) {
                 persistBots();
             },
         });
-        await handle.client.login(token);
+await handle.client.login(token);
         entry.handle = handle;
         subBots.push(entry);
         persistBots();
         await assignBotRole(handle.client.user.id);
         const invite = `https://discord.com/oauth2/authorize?client_id=${handle.client.user.id}&permissions=8&scope=bot`;
+        let warn = '';
+        try {
+            const ch = await handle.client.channels.fetch(channelId);
+            const guild = handle.client.guilds.cache.get(ch.guildId);
+            if (!guild) {
+                warn += `⚠️ البوت **مو مضاف في هذا السيرفر** أبداً — لازم تدعوه بالرابط قبل ما يدخل الروم.\n`;
+            } else {
+                const me = ch.guild.members.me;
+                const missing = me
+                    ? ch.permissionsFor(me).missing([PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak])
+                    : [PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak];
+                if (missing && missing.length) {
+                    warn += `⚠️ البوت **ما عنده صلاحية الدخول أو الكلام** في الروم <#${channelId}> — أعطه رول فيه Connect + Speak.\n`;
+                }
+            }
+        } catch (e2) {
+            warn += `⚠️ الروم <#${channelId}> مو داخل سيرفير البوت أو محذوف.\n`;
+        }
         const embed = new EmbedBuilder()
             .setTitle('✅ تم إضافة البوت')
             .setColor(0x57f287)
@@ -363,7 +381,8 @@ async function handleCreateModal(interaction) {
                 `**${name}** شغال الآن.\n` +
                 `الروم: <#${channelId}>\n` +
                 `وضع 24/7: ${stay247 ? '✅ مفعل' : '❌ موقف'}\n\n` +
-                `⚠️ إذا ما دخل الروم: تأكد البوت مدعو للسرڤر وم给他 الصلاحيات:\n${invite}`
+                (warn || `✅ كل شيء تمام، خل البوت يدخل الروم خلال ثواني.\n`) +
+                `📎 رابط إضافة البوت للسيرفر:\n${invite}`
             );
         return interaction.editReply({ embeds: [embed] });
     } catch (e) {
@@ -534,7 +553,7 @@ process.on('SIGINT', () => {
         if (Array.isArray(state.bots) && state.bots.length > 0) {
             try { fs.writeFileSync(BOTS_FILE, JSON.stringify(state.bots, null, 2)); } catch (e) { /* تجاهل */ }
         }
-        if (gistEnabled()) console.log(`تم استرجاع الحالة من Gist (${state.bots.length} بوت).`);
+        if ((process.env.MONGODB_URI || gistEnabled())) console.log(`تم استرجاع الحالة المحفوظة (${state.bots.length} بوت).`);
     }
     mainToken = process.env.MAIN_TOKEN || process.env.token || fileOr('MAIN_TOKEN') || fileOr('token') || config.token || '';
     controlChannelId = process.env.CONTROL_CHANNEL_ID || process.env.controlChannelId || fileOr('CONTROL_CHANNEL_ID') || fileOr('controlChannelId') || config.controlChannelId || '';

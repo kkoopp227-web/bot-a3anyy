@@ -198,6 +198,9 @@ function createMusicBot(opts) {
 
     function hookConnection(connection, ch) {
         connection.on('stateChange', (oldS, newS) => {
+            if (newS.status === VoiceConnectionStatus.Failed) {
+                console.error(`[${label}] فشل الالتصاق بالروم ${ch.id}: ${newS.reason || 'reason غير معروف'}`);
+            }
             if (newS.status === VoiceConnectionStatus.Disconnected && stay247) {
                 scheduleRejoin(ch.id, ch.guildId, ch.guild.voiceAdapterCreator);
             }
