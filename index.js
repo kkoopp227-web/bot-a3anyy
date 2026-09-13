@@ -113,11 +113,12 @@ async function assignBotRole(botUserId) {
     }
 }
 
-async function startSub(item) {
+async function startSub(item, index) {
     let handle = null;
     try {
         handle = createMusicBot({
             label: item.label,
+            aliases: [item.label, `#${index}`, `${index}`, `@${index}`],
             token: item.token,
             stay247: !!item.stay247,
             forceChannelId: item.channelId || null,
@@ -145,9 +146,11 @@ async function startSub(item) {
 }
 
 async function startAllFromDisk() {
+    let i = 1;
     for (const item of loadBots()) {
         try {
-            await startSub(item);
+            await startSub(item, i);
+            i++;
         } catch (e) {
             console.error(`[${item.label}] فشل التشغيل من البداية: ${e.message}`);
         }
@@ -163,8 +166,10 @@ async function restartAll() {
                 try { b.handle.destroy(); } catch (e) { /* تجاهل */ }
                 b.handle = null;
             }
+            const index = subBots.indexOf(b) + 1;
             handle = createMusicBot({
                 label: b.label,
+                aliases: [b.label, `#${index}`, `${index}`, `@${index}`],
                 token: b.token,
                 stay247: b.stay247,
                 forceChannelId: b.channelId || null,
@@ -252,7 +257,7 @@ function menuEmbed() {
         subBots.forEach((b, i) => {
             embed.addFields({
                 name: `${i + 1}. ${b.label}`,
-                value: `التوكن: \`${maskToken(b.token)}\`\nالروم: <#${b.channelId}>\n24/7: ${b.stay247 ? '✅ مفعل' : '❌ موقف'}`,
+                value: `الاختصار: \`#${i + 1}\` (أو الاسم)\nالتوكن: \`${maskToken(b.token)}\`\nالروم: <#${b.channelId}>\n24/7: ${b.stay247 ? '✅ مفعل' : '❌ موقف'}`,
             });
         });
     }
@@ -341,9 +346,11 @@ async function handleCreateModal(interaction) {
 
     let handle = null;
     try {
+        const index = subBots.length + 1;
         const entry = { label: name, token, channelId, stay247, handle: null };
         handle = createMusicBot({
             label: name,
+            aliases: [name, `#${index}`, `${index}`, `@${index}`],
             token,
             stay247,
             forceChannelId: channelId,
@@ -362,6 +369,9 @@ await handle.client.login(token);
         let warn = '';
         try {
             const ch = await handle.client.channels.fetch(channelId);
+            if (ch.type !== ChannelType.GuildVoice && ch.type !== ChannelType.GuildStageVoice) {
+                warn += `⚠️ <#${channelId}> **مو روم صوتي** — تحقق من الأيدي او استخدم زر الدعوة من اللوحة كبديل.\n`;
+            }
             const guild = handle.client.guilds.cache.get(ch.guildId);
             if (!guild) {
                 warn += `⚠️ البوت **مو مضاف في هذا السيرفر** أبداً — لازم تدعوه بالرابط قبل ما يدخل الروم.\n`;
@@ -383,7 +393,8 @@ await handle.client.login(token);
             .setDescription(
                 `**${name}** شغال الآن.\n` +
                 `الروم: <#${channelId}>\n` +
-                `وضع 24/7: ${stay247 ? '✅ مفعل' : '❌ موقف'}\n\n` +
+                `وضع 24/7: ${stay247 ? '✅ مفعل' : '❌ موقف'}\n` +
+                `الاختصار: اكتب \`#${index}\` (أو \`${name}\`) في الشات لجلبه لرومك.\n\n` +
                 (warn || `✅ كل شيء تمام، خل البوت يدخل الروم خلال ثواني.\n`) +
                 `📎 رابط إضافة البوت للسيرفر:\n${invite}`
             );

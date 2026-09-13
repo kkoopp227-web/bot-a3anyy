@@ -175,6 +175,9 @@ function editAck(q, text) {
 
 function createMusicBot(opts) {
     const label = opts.label || 'بوت';
+    const aliases = (opts.aliases || [label])
+        .map((a) => String(a).replace(/^[#@]/, '').toLowerCase().trim())
+        .filter(Boolean);
     const stay247 = !!opts.stay247;
     let forceChannelId = opts.forceChannelId || null;
     const musicEnabled = opts.musicEnabled !== false;
@@ -459,15 +462,14 @@ function createMusicBot(opts) {
     }
 
     if (musicEnabled) {
-        const normLabel = label.replace(/^[#@]/, '').toLowerCase().trim();
-
         client.on(Events.MessageCreate, async (message) => {
             if (message.author.bot || !message.guild) return;
 
             const content = message.content.trim();
             const lower = content.toLowerCase();
 
-            if (normLabel && lower.replace(/^[#@]/, '').trim() === normLabel) {
+            const strippedLower = lower.replace(/^[#@]/, '').trim();
+            if (aliases.length && aliases.includes(strippedLower)) {
                 console.log(`[${label}] استلمت الاختصار من ${message.author.tag} في القناة ${message.channel.id}`);
                 const userVoice = message.member.voice.channel;
                 if (!userVoice) {
