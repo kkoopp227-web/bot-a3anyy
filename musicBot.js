@@ -469,7 +469,12 @@ function createMusicBot(opts) {
             const lower = content.toLowerCase();
 
             const strippedLower = lower.replace(/^[#@]/, '').trim();
+            if (content.length <= 40 && !/^(ش|شغل|p)\s/i.test(lower)) {
+                console.log(`[${label}] (${client.user.tag}) استقبل رسالة: "${content}"`);
+            }
             if (aliases.length && aliases.includes(strippedLower)) {
+                console.log(`[${label}] (${client.user.tag}) طابق الاختصار: "${content}"`);
+                message.channel.send(`✅ هاك البوت: **${client.user.tag}** — دخلت رومك <#${message.member.voice.channel?.id || ''}>`).catch(() => {});
                 console.log(`[${label}] استلمت الاختصار من ${message.author.tag} في القناة ${message.channel.id}`);
                 const userVoice = message.member.voice.channel;
                 if (!userVoice) {
