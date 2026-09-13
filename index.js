@@ -15,7 +15,7 @@ const {
     StringSelectMenuOptionBuilder,
 } = require('discord.js');
 const { createMusicBot, ensureYtdlp } = require('./musicBot');
-const { downloadState, uploadState, gistEnabled } = require('./persist');
+const { downloadState, uploadState, gistEnabled, lastError } = require('./persist');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -663,7 +663,7 @@ process.on('SIGINT', () => {
     const storageCfgd = !!(process.env.MONGODB_URI || gistEnabled());
     if (storageCfgd) {
         if (state) console.log('✅ التخزين البعيد يعمل — البوتات ستبقى بعد إعادة النشر.');
-        else console.error('⚠️ التخزين البعيد معدّ لكن الاتصال فشل! البوتات لن تُستعاد عند إعادة النشر. افحص MONGODB_URI/Gist في Render.');
+        else console.error('⚠️ التخزين البعيد معدّ لكن الاتصال فشل! السبب: ' + (lastError() || 'بدون تفاصيل (لم يُحفظ أي خطأ)'));
     } else {
         console.error('⚠️ لا يوجد تخزين بعيد (MONGODB_URI أو Gist) في Render! أي بوت تضيفه سيضيع عند إعادة النشر. حط MONGODB_URI (Secret File) أو GIST_TOKEN/GIST_ID الآن.');
     }

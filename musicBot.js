@@ -503,12 +503,28 @@ function createMusicBot(opts) {
                     const doReact = () => {
                         if (reacted) return;
                         reacted = true;
-                        message.react('✅').catch((e) => console.error(`[${label}] فشل الرياكشن (بعد الدخول): ${e.message}`));
+                        const ok = connection.state.status === VoiceConnectionStatus.Ready;
+                        message.react(ok ? '✅' : '❌').catch((e) => console.error(`[${label}] فشل الرياكشن: ${e.message}`));
+                        if (!ok) {
+                            console.error(`[${label}] فشل الدخول: الاتصال لم يصل لحالة Ready (الحالة: ${connection.state.status})`);
+                        }
                     };
+                    connection.once(VoiceConnectionStatus.Red, () => {
+                        message.react('❌').catch(() => {});
+                        console.error(`[${label}] فشل الدخول بالاختصار — الوضع RED (خطأ في شبكة الصوت).`);
+                    });
                     connection.once(VoiceConnectionStatus.Ready, doReact);
                     connection.once(VoiceConnectionStatus.Signalling, doReact);
-                    setTimeout(doReact, 4000);
+                    setTimeout(doReact, 5000);
                     console.log(`[${label}] بدأت الدخول للروم ${targetCh.id}`);
+                    const confirmJoin = setTimeout(() => {
+                        const realState = message.guild.members.me && message.guild.members.me.voice.channelId;
+                        if (realState !== targetCh.id) {
+                            message.react('❌').catch(() => {});
+                            console.error(`[${label}] تأكد: البوت مو داخل الروم ${targetCh.id} (الروم الفعلي: ${realState || 'لا شيء'})`);
+                        }
+                    }, 7000);
+                    setTimeout(() => clearTimeout(confirmJoin), 12000);
                 } catch (e) {
                     console.error(`[${label}] فشل الدخول بالاختصار: ${e.message}`);
                 }
