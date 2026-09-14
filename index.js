@@ -54,6 +54,8 @@ const allowedGuildIds = (process.env.ALLOWED_GUILD_ID || '')
     .map((s) => s.trim())
     .filter(Boolean);
 
+const allowedRoleId = process.env.CONTROL_ROLE_ID || '1548382659586166804';
+
 async function main() {
     const bots = envBotsList();
     if (bots.length === 0) {
@@ -72,6 +74,7 @@ async function main() {
                 stay247: true,
                 forceChannelId: item.channelId,
                 allowedGuildIds,
+                allowedRoleId,
             });
             await handle.client.login(item.token);
             handles.push(handle);

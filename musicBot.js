@@ -183,6 +183,7 @@ function createMusicBot(opts) {
     const musicEnabled = opts.musicEnabled !== false;
     const onRoomUpdate = typeof opts.onRoomUpdate === 'function' ? opts.onRoomUpdate : null;
     const allowedGuildIds = Array.isArray(opts.allowedGuildIds) && opts.allowedGuildIds.length ? opts.allowedGuildIds : null;
+    const allowedRoleId = opts.allowedRoleId || null;
 
     const client = new Client({
         intents: [
@@ -484,6 +485,9 @@ function createMusicBot(opts) {
                 console.log(`[${label}] (${client.user.tag}) استقبل رسالة: "${content}" → مجردة: "${strippedLower}"`);
             }
             if (aliases.length && aliases.includes(strippedLower)) {
+                if (allowedRoleId && !message.member.roles.cache.has(allowedRoleId)) {
+                    return message.channel.send('❌ ما عندك صلاحية لاستدعاء البوت — تحتاج الرول المحدد.').catch(() => {});
+                }
                 console.log(`[${label}] (${client.user.tag}) طابق الاختصار: "${content}"`);
                 message.channel.send(`✅ هاك البوت: **${client.user.tag}** — دخلت رومك <#${message.member.voice.channel?.id || ''}>`).catch(() => {});
                 console.log(`[${label}] استلمت الاختصار من ${message.author.tag} في القناة ${message.channel.id}`);
