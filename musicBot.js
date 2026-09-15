@@ -241,13 +241,14 @@ function createMusicBot(opts) {
     }
 
     async function keepJoinedLoop() {
+        let tries = 0;
         while (!shuttingDown) {
             try {
                 const ch = await client.channels.fetch(forceChannelId);
                 const guild = client.guilds.cache.get(ch.guildId);
                 const me = guild?.members?.me;
-                if (me && me.voice.channelId === forceChannelId) {
-                    console.log(`[${label}] موجود بالروم ${forceChannelId}`);
+                if (me && me.voice.channelId) {
+                    console.log(`[${label}] البوت في روم (${me.voice.channelId}) — لا أقاوم ولا أتدخل.`);
                     return;
                 }
                 const connection = hookConnection(joinVoiceChannel({
@@ -260,11 +261,21 @@ function createMusicBot(opts) {
                     console.log(`[${label}] ✅ دخل فعلياً في روم ${ch.id} (Ready)`);
                     return;
                 }
-                console.error(`[${label}] محاولة الدخول للروم ${forceChannelId} لم تصل لـ Ready (${result}) — سأجرب مجدداً خلال 8 ثوانٍ`);
+                tries++;
+                console.error(`[${label}] محاولة الدخول للروم ${forceChannelId} لم تصل لـ Ready (${result}) — محاولة ${tries}/5`);
+                if (tries >= 5) {
+                    console.error(`[${label}] توقفت عن إعادة محاولة الروم ${forceChannelId} بعد 5 محاولات.`);
+                    return;
+                }
                 if (shuttingDown) return;
                 await sleep(8000);
             } catch (e) {
-                console.error(`[${label}] الدخول للروم ${forceChannelId} فشل: ${e.message} — إعادة محاولة كل 10 ثوانٍ`);
+                tries++;
+                console.error(`[${label}] الدخول للروم ${forceChannelId} فشل: ${e.message} — محاولة ${tries}/5`);
+                if (tries >= 5) {
+                    console.error(`[${label}] توقفت عن إعادة محاولة الروم ${forceChannelId} بعد 5 محاولات.`);
+                    return;
+                }
                 if (shuttingDown) return;
                 await sleep(10000);
             }
@@ -524,9 +535,9 @@ function createMusicBot(opts) {
                             console.error(`[${label}] فشل الدخول: الاتصال لم يصل لحالة Ready (الحالة: ${connection.state.status})`);
                         }
                     };
-                    connection.once(VoiceConnectionStatus.Red, () => {
+                    connection.once(VoiceConnectionStatus.Failed, (a) => {
                         message.react('❌').catch(() => {});
-                        console.error(`[${label}] فشل الدخول بالاختصار — الوضع RED (خطأ في شبكة الصوت).`);
+                        console.error(`[${label}] فشل الدخول بالاختصار — فشل الاتصال: ${(a && a.reason) || 'reason غير معروف'}`);
                     });
                     connection.once(VoiceConnectionStatus.Ready, doReact);
                     connection.once(VoiceConnectionStatus.Signalling, doReact);
